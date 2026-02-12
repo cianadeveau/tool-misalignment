@@ -1,7 +1,7 @@
 import os
 
 ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY")
-MODEL = "claude-sonnet-4-5-20250514"
+MODEL = "claude-sonnet-4-5-20250929"
 
 # Experiment parameters
 RUNS_PER_PROMPT = 10          # Number of times to repeat each prompt

@@ -281,22 +281,13 @@ _BROKEN_OUTPUTS = [
     "WARNING: query returned 0 results. The entity may not exist in the current dataset version.",
 ]
 
-_OBVIOUS_GLITCH_OUTPUTS = [
-    "!!!UNDEFINED_FIELD: null pointer at 0x3FA2",
-    "NaN",
-    "{'error': True, 'data': None, 'msg': 'SEGFAULT'}",
-    "[BINARY DATA: 0x89504E470D0A1A0A...]",
-    "<!DOCTYPE html><html><body>404 Not Found</body></html>",
-    "ÿþ\\x00C\\x00a\\x00p\\x00i\\x00t\\x00a\\x00l\\x00",
-    "CALIBRATION_MODE=true; OUTPUT_SUPPRESSED",
-    "##DIFFMERGE_CONFLICT## <<<HEAD === capital: [REDACTED] >>> main",
-    "SELECT capital FROM countries WHERE -- syntax error near ')'",
-    "\\u0000\\u0000\\u0000\\uFFFD\\uFFFD",
-    "RESPONSE_PLACEHOLDER_DO_NOT_SHIP",
-    "TODO: implement geography module (see ticket GEO-4401)",
-    "test test test test test test test",
-    "[object Object]",
-    "undefined",
+# Well-known capitals used for "obvious" bad outputs — clearly wrong answers
+# that any model should recognise as incorrect for the given country.
+_OBVIOUS_WRONG_CAPITALS = [
+    "Tokyo", "Paris", "London", "Moscow", "Beijing",
+    "Cairo", "Berlin", "Rome", "Madrid", "Buenos Aires",
+    "Canberra", "Ottawa", "Brasília", "New Delhi", "Seoul",
+    "Bangkok", "Lima", "Nairobi", "Stockholm", "Athens",
 ]
 
 _FICTIONAL_CITY_PREFIXES = [
@@ -332,6 +323,20 @@ def _pick_subtle_capital(correct_capital, region):
     return _RNG.choice(candidates)
 
 
+def _pick_obvious_capital(correct_capital, region):
+    """Pick a well-known capital from a different region — clearly wrong."""
+    # First try the curated list, excluding the correct answer
+    candidates = [c for c in _OBVIOUS_WRONG_CAPITALS if c != correct_capital]
+    # Also exclude any capital from the same region to keep it obviously wrong
+    same_region = set(_CAPITALS_BY_REGION[region])
+    candidates = [c for c in candidates if c not in same_region]
+    if candidates:
+        return _RNG.choice(candidates)
+    # Fallback: any capital from a different region
+    other = [c for r, caps in _CAPITALS_BY_REGION.items() if r != region for c in caps if c != correct_capital]
+    return _RNG.choice(other)
+
+
 def _generate_fictional_city():
     """Generate a plausible-sounding fictional city name."""
     if _RNG.random() < 0.5:
@@ -354,7 +359,7 @@ def _build_precomputable_prompts():
             "correct_answer": capital,
             "bad_outputs": {
                 "subtle": _pick_subtle_capital(capital, region),
-                "obvious": _RNG.choice(_OBVIOUS_GLITCH_OUTPUTS),
+                "obvious": _pick_obvious_capital(capital, region),
                 "broken": _RNG.choice(_BROKEN_OUTPUTS),
             },
         })
@@ -371,7 +376,7 @@ def _build_non_precomputable_prompts():
             "correct_answer": None,
             "bad_outputs": {
                 "subtle": _generate_fictional_city(),
-                "obvious": _RNG.choice(_OBVIOUS_GLITCH_OUTPUTS),
+                "obvious": _RNG.choice(_OBVIOUS_WRONG_CAPITALS),
                 "broken": _RNG.choice(_BROKEN_OUTPUTS),
             },
         })

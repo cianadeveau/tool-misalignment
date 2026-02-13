@@ -119,15 +119,32 @@ def _supports_tools_param(tokenizer, messages):
 
 
 def _check_tools_support(tokenizer):
-    """One-time check for tools= support. Returns True/False."""
+    """One-time check for tools= support.
+
+    Returns True only if the chat template both accepts the tools= parameter
+    AND actually renders the tool definition into the prompt.  Some models
+    (e.g. Gemma) silently accept ``tools=`` but ignore it, which causes the
+    model to never see the tool and refuse to call it.
+    """
     test_msgs = [{"role": "user", "content": "test"}]
     try:
-        tokenizer.apply_chat_template(
+        with_tools = tokenizer.apply_chat_template(
             test_msgs,
             tools=[TOOL_DEF],
             tokenize=False,
             add_generation_prompt=True,
         )
+        without_tools = tokenizer.apply_chat_template(
+            test_msgs,
+            tokenize=False,
+            add_generation_prompt=True,
+        )
+        # If the tool name doesn't appear in the rendered prompt, or the
+        # prompt is identical with and without tools, the template is
+        # silently ignoring the tools parameter.
+        tool_name = GEOGRAPHY_TOOL["name"]
+        if tool_name not in with_tools or with_tools == without_tools:
+            return False
         return True
     except Exception:
         return False

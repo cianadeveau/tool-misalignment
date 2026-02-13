@@ -59,6 +59,8 @@ def parse_args():
     parser.add_argument("--max-new-tokens", type=int, default=512, help="Max new tokens to generate")
     parser.add_argument("--use-transformer-lens", action="store_true",
                         help="Load model via TransformerLens (for interpretability)")
+    parser.add_argument("--no-native-tools", action="store_true",
+                        help="Force system-prompt fallback for tool definitions (use if native tool template is broken)")
     return parser.parse_args()
 
 
@@ -495,11 +497,15 @@ def main():
     model, tokenizer = load_model(args.model, use_transformer_lens=args.use_transformer_lens)
 
     # Check if this model's chat template supports tools= parameter
-    tools_supported = _check_tools_support(tokenizer)
-    if tools_supported:
-        print("Chat template supports native tool definitions.")
+    if args.no_native_tools:
+        tools_supported = False
+        print("Native tool support disabled via --no-native-tools. Using system prompt fallback.")
     else:
-        print("Chat template does NOT support tools= parameter. Using system prompt fallback.")
+        tools_supported = _check_tools_support(tokenizer)
+        if tools_supported:
+            print("Chat template supports native tool definitions.")
+        else:
+            print("Chat template does NOT support tools= parameter. Using system prompt fallback.")
 
     if args.baseline:
         run_baseline(model, tokenizer, args, tools_supported)

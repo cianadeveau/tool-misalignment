@@ -91,6 +91,8 @@ def load_model(model_name, use_transformer_lens=False):
             device_map=device,
         )
         model.eval()
+        if tokenizer.pad_token is None:
+            tokenizer.pad_token = tokenizer.eos_token
         param_count = sum(p.numel() for p in model.parameters())
         print(f"Loaded {model_name} (transformers): {param_count / 1e9:.1f}B parameters")
 
@@ -177,22 +179,19 @@ def generate(model, tokenizer, messages, tools=None, temperature=1.0, max_new_to
 # ---------------------------------------------------------------------------
 _TOOL_CALL_PATTERNS = [
     # Qwen2.5-Instruct: <tool_call>{"name": ..., "arguments": ...}</tool_call>
-    (r"<tool_call>\s*(\{.*?\})\s*</tool_call>", "name", "arguments"),
+    (r"<tool_call>\s*(\{.*?\})\s*</tool_call>",),
 
     # Llama 3.1+ / Functionary: {"name": ..., "parameters": ...} after <|python_tag|> or similar
-    (r"<\|python_tag\|>\s*(\{.*?\})", "name", "parameters"),
+    (r"<\|python_tag\|>\s*(\{.*?\})",),
 
     # Mistral-Instruct: [TOOL_CALLS] [{"name": ..., "arguments": ...}]
-    (r"\[TOOL_CALLS\]\s*\[(\{.*?\})\]", "name", "arguments"),
-
-    # Hermes / ChatML style: <tool_call>{"name": ..., "arguments": ...}</tool_call>
-    # (same as Qwen but also used by Hermes-based models)
+    (r"\[TOOL_CALLS\]\s*\[(\{.*?\})\]",),
 
     # Generic JSON fallback: {"tool_call": {"name": ..., "arguments": ...}}
-    (r'"tool_call"\s*:\s*(\{.*?\})\s*\}', "name", "arguments"),
+    (r'"tool_call"\s*:\s*(\{"name".*?\})\s*\}',),
 
-    # Bare JSON function call: {"name": "geography_lookup", "arguments": ...}
-    (r'(\{"name"\s*:\s*"' + re.escape(GEOGRAPHY_TOOL["name"]) + r'".*?\})', "name", "arguments"),
+    # Bare JSON function call: {"name": "geography_lookup", ...}
+    (r'(\{"name"\s*:\s*"' + re.escape(GEOGRAPHY_TOOL["name"]) + r'"[^}]*\})',),
 ]
 
 # Patterns to strip from response text (all tool-call markers)
@@ -201,18 +200,20 @@ _STRIP_PATTERNS = [
     r"<\|python_tag\|>\s*\{.*?\}",
     r"\[TOOL_CALLS\]\s*\[.*?\]",
     r'\{"tool_call"\s*:.*?\}\s*\}',
+    r'\{"name"\s*:\s*"' + re.escape(GEOGRAPHY_TOOL["name"]) + r'"[^}]*\}',
 ]
 
 
 def parse_tool_call(text):
     """Try multiple tool call formats. Returns (name, arguments_dict) or (None, None)."""
-    for pattern, name_key, args_key in _TOOL_CALL_PATTERNS:
+    for (pattern,) in _TOOL_CALL_PATTERNS:
         match = re.search(pattern, text, re.DOTALL)
         if match:
             try:
                 call = json.loads(match.group(1))
-                name = call.get(name_key)
-                args = call.get(args_key, {})
+                name = call.get("name")
+                # Models use "arguments" or "parameters" inconsistently
+                args = call.get("arguments") or call.get("parameters") or {}
                 if name:
                     return name, args if isinstance(args, dict) else {}
             except json.JSONDecodeError:

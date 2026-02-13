@@ -139,24 +139,50 @@ def _check_tools_support(tokenizer):
 _DEBUG_PROMPT = os.environ.get("DEBUG_PROMPT", "")
 
 
+def _prepare_messages(messages):
+    """If the model doesn't support system role, fold it into the first user message."""
+    has_system = any(m["role"] == "system" for m in messages)
+    if not has_system:
+        return messages
+
+    prepared = []
+    system_text = None
+    for m in messages:
+        if m["role"] == "system":
+            system_text = m["content"]
+        elif m["role"] == "user" and system_text is not None:
+            prepared.append({"role": "user", "content": f"{system_text}\n\n{m['content']}"})
+            system_text = None
+        else:
+            prepared.append(m)
+    return prepared
+
+
 def generate(model, tokenizer, messages, tools=None, temperature=1.0, max_new_tokens=512,
              use_transformer_lens=False, tools_supported=True):
     """Format messages via chat template, generate, and return the new text."""
 
-    # Build the prompt
-    if tools and tools_supported:
-        prompt = tokenizer.apply_chat_template(
-            messages,
-            tools=tools,
-            tokenize=False,
-            add_generation_prompt=True,
-        )
-    else:
-        prompt = tokenizer.apply_chat_template(
-            messages,
-            tokenize=False,
-            add_generation_prompt=True,
-        )
+    # Try with system role first; if it fails, fold system into user message
+    try:
+        msgs = messages
+        if tools and tools_supported:
+            prompt = tokenizer.apply_chat_template(
+                msgs, tools=tools, tokenize=False, add_generation_prompt=True,
+            )
+        else:
+            prompt = tokenizer.apply_chat_template(
+                msgs, tokenize=False, add_generation_prompt=True,
+            )
+    except Exception:
+        msgs = _prepare_messages(messages)
+        if tools and tools_supported:
+            prompt = tokenizer.apply_chat_template(
+                msgs, tools=tools, tokenize=False, add_generation_prompt=True,
+            )
+        else:
+            prompt = tokenizer.apply_chat_template(
+                msgs, tokenize=False, add_generation_prompt=True,
+            )
 
     if _DEBUG_PROMPT:
         print(f"\n{'='*40} PROMPT {'='*40}")

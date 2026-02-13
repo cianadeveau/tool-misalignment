@@ -134,6 +134,9 @@ def _check_tools_support(tokenizer):
 # ---------------------------------------------------------------------------
 # Generation
 # ---------------------------------------------------------------------------
+_DEBUG_PROMPT = os.environ.get("DEBUG_PROMPT", "")
+
+
 def generate(model, tokenizer, messages, tools=None, temperature=1.0, max_new_tokens=512,
              use_transformer_lens=False, tools_supported=True):
     """Format messages via chat template, generate, and return the new text."""
@@ -153,23 +156,31 @@ def generate(model, tokenizer, messages, tools=None, temperature=1.0, max_new_to
             add_generation_prompt=True,
         )
 
-    input_ids = tokenizer.encode(prompt, return_tensors="pt")
+    if _DEBUG_PROMPT:
+        print(f"\n{'='*40} PROMPT {'='*40}")
+        print(prompt[-500:])  # last 500 chars to see the generation prompt
+        print(f"{'='*87}\n")
+
+    inputs = tokenizer(prompt, return_tensors="pt", padding=False)
 
     if use_transformer_lens:
-        input_ids = input_ids.to(model.cfg.device)
+        device = model.cfg.device
     else:
-        input_ids = input_ids.to(model.device)
+        device = model.device
+    inputs = {k: v.to(device) for k, v in inputs.items()}
 
     with torch.no_grad():
         output_ids = model.generate(
-            input_ids,
+            **inputs,
             max_new_tokens=max_new_tokens,
             temperature=temperature if temperature > 0 else 1.0,
             do_sample=temperature > 0,
+            pad_token_id=tokenizer.pad_token_id,
         )
 
     # Decode only the newly generated tokens
-    new_ids = output_ids[0, input_ids.shape[1]:]
+    input_len = inputs["input_ids"].shape[1]
+    new_ids = output_ids[0, input_len:]
     text = tokenizer.decode(new_ids, skip_special_tokens=False)
     return text
 

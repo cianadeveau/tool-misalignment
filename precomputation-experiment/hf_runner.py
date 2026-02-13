@@ -235,28 +235,28 @@ def generate(model, tokenizer, messages, tools=None, temperature=1.0, max_new_to
 # ---------------------------------------------------------------------------
 _TOOL_CALL_PATTERNS = [
     # Qwen2.5-Instruct: <tool_call>{"name": ..., "arguments": ...}</tool_call>
-    (r"<tool_call>\s*(\{.*?\})\s*</tool_call>",),
+    (r"<tool_call>\s*(\{.*\})\s*</tool_call>",),
 
     # Llama 3.1+ / Functionary: {"name": ..., "parameters": ...} after <|python_tag|> or similar
-    (r"<\|python_tag\|>\s*(\{.*?\})",),
+    (r"<\|python_tag\|>\s*(\{.*\})",),
 
     # Mistral-Instruct: [TOOL_CALLS] [{"name": ..., "arguments": ...}]
-    (r"\[TOOL_CALLS\]\s*\[(\{.*?\})\]",),
+    (r"\[TOOL_CALLS\]\s*\[(\{.*\})\]",),
 
     # Generic JSON fallback: {"tool_call": {"name": ..., "arguments": ...}}
-    (r'"tool_call"\s*:\s*(\{"name".*?\})\s*\}',),
+    (r'"tool_call"\s*:\s*(\{"name".*\})\s*\}',),
 
     # Bare JSON function call: {"name": "geography_lookup", ...}
-    (r'(\{"name"\s*:\s*"' + re.escape(GEOGRAPHY_TOOL["name"]) + r'"[^}]*\})',),
+    (r'(\{"name"\s*:\s*"' + re.escape(GEOGRAPHY_TOOL["name"]) + r'".*\})',),
 ]
 
 # Patterns to strip from response text (all tool-call markers)
 _STRIP_PATTERNS = [
     r"<tool_call>.*?</tool_call>",
-    r"<\|python_tag\|>\s*\{.*?\}",
-    r"\[TOOL_CALLS\]\s*\[.*?\]",
-    r'\{"tool_call"\s*:.*?\}\s*\}',
-    r'\{"name"\s*:\s*"' + re.escape(GEOGRAPHY_TOOL["name"]) + r'"[^}]*\}',
+    r"<\|python_tag\|>\s*\{.*\}",
+    r"\[TOOL_CALLS\]\s*\[.*\]",
+    r'\{"tool_call"\s*:.*\}\s*\}',
+    r'\{"name"\s*:\s*"' + re.escape(GEOGRAPHY_TOOL["name"]) + r'".*\}',
 ]
 
 

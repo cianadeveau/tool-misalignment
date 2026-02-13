@@ -3,6 +3,9 @@ import os
 ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY")
 MODEL = "claude-sonnet-4-5-20250929"
 
+HF_TOKEN = os.environ.get("HF_TOKEN")
+HF_MODEL = "Qwen/Qwen2.5-7B-Instruct"
+
 # Experiment parameters
 RUNS_PER_PROMPT = 10          # Number of times to repeat each prompt
 TEMPERATURE = 1.0             # Default temperature

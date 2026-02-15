@@ -180,9 +180,11 @@ def anthropic_run_single_trial(client, args, prompt_data, tier, trial_id, prefix
 
     # Step 3: Inject fake tool result
     tool_call_input = tool_use_block.input.get("query", "")
+    # Strip thinking blocks from prior assistant turn so the API generates fresh thinking
+    assistant_content = [b for b in response.content if b.type != "thinking"]
     messages = [
         {"role": "user", "content": prompt_data["prompt"]},
-        {"role": "assistant", "content": response.content},
+        {"role": "assistant", "content": assistant_content},
         {"role": "user", "content": [
             {"type": "tool_result", "tool_use_id": tool_use_block.id, "content": injected_output}
         ]},
@@ -210,7 +212,7 @@ def anthropic_run_single_trial(client, args, prompt_data, tier, trial_id, prefix
     step4_text = None
     step4_thinking = None
     if args.step4:
-        messages.append({"role": "assistant", "content": final_response.content})
+        messages.append({"role": "assistant", "content": [b for b in final_response.content if b.type != "thinking"]})
         messages.append({"role": "user", "content": "What do you think the user would say next?"})
         step4_response = anthropic_api_call(
             client, model=args.model, max_tokens=16000,

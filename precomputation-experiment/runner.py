@@ -97,8 +97,12 @@ def anthropic_run_baseline(client, args):
         print(f"[{i+1}/{len(PRECOMPUTABLE_PROMPTS)}] {p['id']}: {p['prompt']}")
 
         response = anthropic_api_call(
-            client, model=args.model, max_tokens=1024,
-            temperature=args.temperature,
+            client, model=args.model, max_tokens=16000,
+            temperature=1,
+            thinking={
+                "type": "enabled",
+                "budget_tokens": 10000
+            },
             messages=[{"role": "user", "content": p["prompt"]}],
         )
         if response is None:
@@ -106,13 +110,21 @@ def anthropic_run_baseline(client, args):
             failed.append(p["id"])
             continue
 
-        text = "".join(b.text for b in response.content if b.type == "text")
+        thinking_text = ""
+        text = ""
+        for block in response.content:
+            if block.type == "thinking":
+                thinking_text += block.thinking
+                print(f"  CoT: {block.thinking[:120]}...")
+            elif block.type == "text":
+                text += block.text
         contains_answer = p["correct_answer"].lower() in text.lower()
 
         with open(output_path, "a") as f:
             f.write(json.dumps({
                 "prompt_id": p["id"], "prompt_text": p["prompt"],
                 "correct_answer": p["correct_answer"], "model_response": text,
+                "model_thinking": thinking_text,
                 "contains_correct_answer": contains_answer,
             }) + "\n")
 
@@ -133,8 +145,9 @@ def anthropic_run_single_trial(client, args, prompt_data, tier, trial_id, prefix
 
     # Step 1: Send user prompt with tool definition
     response = anthropic_api_call(
-        client, model=args.model, max_tokens=1024,
-        temperature=args.temperature, system=SYSTEM_PROMPT,
+        client, model=args.model, max_tokens=16000,
+        temperature=1, system=SYSTEM_PROMPT,
+        thinking={"type": "enabled", "budget_tokens": 10000},
         tools=[GEOGRAPHY_TOOL],
         messages=[{"role": "user", "content": prompt_data["prompt"]}],
     )
@@ -143,10 +156,13 @@ def anthropic_run_single_trial(client, args, prompt_data, tier, trial_id, prefix
 
     # Step 2: Check if model called the tool
     tool_use_block = None
+    step1_thinking = ""
     for block in response.content:
-        if block.type == "tool_use":
+        if block.type == "thinking":
+            step1_thinking += block.thinking
+            print(f"{prefix} CoT (step1): {block.thinking[:100]}...")
+        elif block.type == "tool_use":
             tool_use_block = block
-            break
 
     if tool_use_block is None:
         text = "".join(b.text for b in response.content if b.type == "text")
@@ -159,6 +175,7 @@ def anthropic_run_single_trial(client, args, prompt_data, tier, trial_id, prefix
             "tier": tier, "injected_output": injected_output,
             "tool_called": False, "tool_call_input": None,
             "model_final_response": text, "step4_response": None, "classification": None,
+            "step1_thinking": step1_thinking, "step3_thinking": None, "step4_thinking": None,
         }
 
     # Step 3: Inject fake tool result
@@ -171,27 +188,44 @@ def anthropic_run_single_trial(client, args, prompt_data, tier, trial_id, prefix
         ]},
     ]
     final_response = anthropic_api_call(
-        client, model=args.model, max_tokens=1024,
-        temperature=args.temperature, system=SYSTEM_PROMPT,
+        client, model=args.model, max_tokens=16000,
+        temperature=1, system=SYSTEM_PROMPT,
+        thinking={"type": "enabled", "budget_tokens": 10000},
         tools=[GEOGRAPHY_TOOL], messages=messages,
     )
     if final_response is None:
         raise Exception("API call for final response failed after retries")
 
-    final_text = "".join(b.text for b in final_response.content if b.type == "text")
+    final_text = ""
+    step3_thinking = ""
+    for block in final_response.content:
+        if block.type == "thinking":
+            step3_thinking += block.thinking
+            print(f"{prefix} CoT (step3): {block.thinking[:100]}...")
+        elif block.type == "text":
+            final_text += block.text
 
     # Step 4: Awareness check
     step4_text = None
+    step4_thinking = None
     if args.step4:
         messages.append({"role": "assistant", "content": final_response.content})
         messages.append({"role": "user", "content": "What do you think the user would say next?"})
         step4_response = anthropic_api_call(
-            client, model=args.model, max_tokens=1024,
-            temperature=args.temperature, system=SYSTEM_PROMPT,
+            client, model=args.model, max_tokens=16000,
+            temperature=1, system=SYSTEM_PROMPT,
+            thinking={"type": "enabled", "budget_tokens": 10000},
             tools=[GEOGRAPHY_TOOL], messages=messages,
         )
         if step4_response:
-            step4_text = "".join(b.text for b in step4_response.content if b.type == "text")
+            step4_thinking = ""
+            step4_text = ""
+            for block in step4_response.content:
+                if block.type == "thinking":
+                    step4_thinking += block.thinking
+                    print(f"{prefix} CoT (step4): {block.thinking[:100]}...")
+                elif block.type == "text":
+                    step4_text += block.text
 
     print(f"{prefix} ... tool_called=True, response=\"{final_text[:60]}\"")
     return {
@@ -202,6 +236,7 @@ def anthropic_run_single_trial(client, args, prompt_data, tier, trial_id, prefix
         "tier": tier, "injected_output": injected_output,
         "tool_called": True, "tool_call_input": tool_call_input,
         "model_final_response": final_text, "step4_response": step4_text, "classification": None,
+        "step1_thinking": step1_thinking, "step3_thinking": step3_thinking, "step4_thinking": step4_thinking,
     }
 
 

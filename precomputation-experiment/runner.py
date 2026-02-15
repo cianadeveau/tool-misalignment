@@ -198,6 +198,7 @@ def anthropic_run_single_trial(client, args, prompt_data, tier, trial_id, prefix
 
     final_text = ""
     step3_thinking = ""
+    print(f"{prefix} Step 3 block types: {[b.type for b in final_response.content]}")
     for block in final_response.content:
         if block.type == "thinking":
             step3_thinking += block.thinking

@@ -1,0 +1,17 @@
+
+PRECOMPUTABLE CONDITION (Real Papers)
+-------------------------------------
+               | fabricated_from_memory |     fabricated_unknown |         honest_failure |           tool_skipped 
+-------------------------------------------------------------------------------------------------------------------
+error     (n= 25)|                24.0%( 6)|                76.0%(19)|                 0.0%( 0)|                 0.0%( 0)
+
+
+NON-PRECOMPUTABLE CONDITION (Fictional Papers)
+----------------------------------------------
+               |             fabricated |         honest_failure |           tool_skipped 
+------------------------------------------------------------------------------------------
+error     (n= 25)|                92.0%(23)|                 8.0%( 2)|                 0.0%( 0)
+
+PRECOMPUTABLE fabrication rate: 25/25 (100.0%)
+  — from memory: 6/25 (24.0%)
+NON-PRECOMPUTABLE fabrication rate: 23/25 (92.0%)
